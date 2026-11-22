@@ -228,6 +228,12 @@ function initCloud(){
 }
 
 /* ================= 数据层：云端优先，本地兜底 ================= */
+// 生成唯一主键：毫秒时间戳 + 3位随机，避免两端/并发撞号
+function genId(){
+  const ts = Date.now();
+  const rand = Math.floor(Math.random()*900+100);
+  return ts * 1000 + rand;
+}
 async function loadData(){
   if(cloudCfg.enabled && sbClient){
     try {
@@ -252,10 +258,15 @@ async function persistNew(row){
   const key = PRESET_KEY;
   const headers = { apikey: key, "Content-Type": "application/json" };
   if(!key.startsWith("sb_")) headers["Authorization"] = "Bearer " + key;
+  // 云端列只接受：id, amount, category, note, status, created_at, approved_at
+  const cloudRow = {
+    id: row.id, amount: row.amount, category: row.category, note: row.note,
+    status: row.status, created_at: row.created_at, approved_at: row.approved_at
+  };
   let statusTxt = "";
   try {
     const r = await fetch(`${url}/rest/v1/money_apps`, {
-      method:"POST", headers, body: JSON.stringify(row)
+      method:"POST", headers, body: JSON.stringify(cloudRow)
     });
     const txt = await r.text();
     statusTxt = "HTTP "+r.status;
@@ -315,13 +326,13 @@ async function submitApply(){
     const note = document.getElementById("note").value.trim();
     if(!amount || amount<=0){ toast("请输入正确金额"); return; }
     const row = {
-      id: Date.now(),
+      id: genId(),
       amount: amount,
       category: category,
       note: note,
       status: "pending",
-      createdAt: new Date().toLocaleString("zh-CN"),
-      approvedAt: ""
+      created_at: new Date().toLocaleString("zh-CN"),
+      approved_at: ""
     };
     await persistNew(row);
     document.getElementById("amount").value = "";
@@ -338,13 +349,13 @@ async function sendToWife(){
   const note = document.getElementById("note").value.trim();
   if(!amount || amount<=0){ toast("请输入正确金额"); return; }
   const row = {
-    id: Date.now(),
+    id: genId(),
     amount: amount,
     category: category,
     note: note,
     status: "pending",
-    createdAt: new Date().toLocaleString("zh-CN"),
-    approvedAt: ""
+    created_at: new Date().toLocaleString("zh-CN"),
+    approved_at: ""
   };
   await persistNew(row);
   document.getElementById("amount").value = "";
@@ -355,7 +366,7 @@ async function sendToWife(){
 "用途：" + category + "\n" +
 "金额：¥" + amount.toFixed(2) + "\n" +
 "事由：" + (note || "（未填写）") + "\n" +
-"提交时间：" + row.createdAt + "\n" +
+"提交时间：" + row.created_at + "\n" +
 "—— 请打开审批页面，输入密码 341126 审批";
 
   // 复制到剪贴板
@@ -388,13 +399,13 @@ async function manualAdd(){
   const note = document.getElementById("in-note").value.trim();
   if(!amount || amount<=0){ toast("请输入正确金额"); return; }
   const row = {
-    id: Date.now(),
+    id: genId(),
     amount: amount,
     category: category,
     note: note,
     status: "pending",
-    createdAt: new Date().toLocaleString("zh-CN"),
-    approvedAt: ""
+    created_at: new Date().toLocaleString("zh-CN"),
+    approved_at: ""
   };
   await persistNew(row);
   document.getElementById("in-amount").value = "";
