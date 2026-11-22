@@ -1,0 +1,18 @@
+name: 待审批超24小时提醒
+
+on:
+  schedule:
+    # 每小时运行一次（UTC，对应北京时间每小时）
+    - cron: '0 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 运行提醒脚本
+        run: node scripts/remind.js
