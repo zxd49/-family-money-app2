@@ -143,6 +143,7 @@
       <input id="bark-key" placeholder="对方 Bark 的 key">
       <button class="btn" onclick="saveCloudConfig()">保存并开启云端同步</button>
       <button class="btn ghost" onclick="testCloud()">测试连接</button>
+      <button class="btn ghost" onclick="testBark()">测试 Bark 推送</button>
       <button class="btn ghost" onclick="disableCloud()">关闭云端同步（回到本地）</button>
     </details>
   </div>
@@ -528,20 +529,28 @@ function copyWxText(){ copyText(wxText); toast("转账说明已复制"); }
 // Bark：把待审批提醒推送给对方 iPhone（系统通知）
 function roleName(){ return (cloudCfg.role === "wife") ? "老婆" : "老公"; }
 async function barkSend(targetKey, title, body){
-  if(!targetKey) return;
+  if(!targetKey) return false;
   try {
-    await fetch(`https://api.day.app/${encodeURIComponent(targetKey)}`, {
+    const r = await fetch(`https://api.day.app/${encodeURIComponent(targetKey)}`, {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ title, body, group:"经费审批" })
     });
-  } catch(e){ console.error("BARK ERR:", e); }
+    return r.ok;
+  } catch(e){ console.error("BARK ERR:", e); return false; }
 }
 async function barkPush(row){
   const bk = (cloudCfg && cloudCfg.barkKey) || "";
   const title = "经费申请待审批";
   const body = `${roleName()}发起申请\n用途：${row.category}\n金额：¥${row.amount.toFixed(2)}\n事由：${row.note || "（未填写）"}`;
   await barkSend(bk, title, body);
+}
+// 手动测试：点一下把测试通知推给对方 Bark key
+async function testBark(){
+  const bk = document.getElementById("bark-key").value.trim();
+  if(!bk){ toast("先填对方 Bark key"); return; }
+  const ok = await barkSend(bk, "经费审批", "这是一条测试通知，收到就说明 Bark 配置成功");
+  toast(ok ? "已发送，请看对方手机" : "发送失败，检查 key");
 }
 
 function tryOpenWeixin(){
