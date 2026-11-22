@@ -42,6 +42,12 @@
   .stat .lbl { font-size:12px; color:#888; }
   .pwd-box { max-width:280px; margin:0 auto; text-align:center; }
   .toast { position:fixed; top:40%; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.8); color:#fff; padding:10px 20px; border-radius:8px; font-size:14px; z-index:99; display:none; }
+  .wx-mask { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .wx-box { background:#fff; border-radius:16px; padding:22px 18px; width:100%; max-width:340px; text-align:center; }
+  .wx-title { font-size:17px; font-weight:700; margin-bottom:12px; }
+  .wx-amt { font-size:28px; font-weight:700; color:#ff6a00; margin:6px 0; }
+  .wx-note { font-size:14px; color:#555; margin:6px 0; }
+  .wx-tip { font-size:12.5px; color:#999; margin:12px 0; line-height:1.6; }
   .empty { text-align:center; color:#aaa; padding:30px 0; font-size:14px; }
   .sync-tag { font-size:12px; color:#52c41a; float:right; }
   details { margin-top:8px; }
@@ -139,6 +145,18 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="wx-mask" id="wx-mask" style="display:none">
+  <div class="wx-box">
+    <div class="wx-title">✅ 已批准，待转账</div>
+    <div class="wx-amt" id="wx-amt"></div>
+    <div class="wx-note" id="wx-note"></div>
+    <div class="wx-tip">微信不支持网页直接跳转转账，请手动在微信转账。下面已为你复制好转账说明。</div>
+    <button class="btn" style="width:100%;margin-top:10px" onclick="tryOpenWeixin()">打开微信</button>
+    <button class="btn small" style="width:100%;margin-top:8px" onclick="copyWxText()">重新复制转账说明</button>
+    <button class="btn small danger" style="width:100%;margin-top:8px" onclick="closeWxMask()">关闭</button>
+  </div>
+</div>
 
 <script>
 /* ================= 配置区 ================= */
@@ -453,19 +471,44 @@ async function renderPending(){
   `).join("");
 }
 
+let wxText = "";
 async function decide(id, status){
   const patch = { status, approved_at: new Date().toLocaleString("zh-CN") };
   await persistUpdate(id, patch);
   if(status==="approved"){
     const arr = await loadData();
     const item = arr.find(x=>x.id===id);
-    window.location.href = "weixin://";
-    toast("已批准，请在微信手动转账 ¥"+(item?item.amount.toFixed(2):""));
+    const amt = item ? item.amount.toFixed(2) : "0.00";
+    wxText = "经费审批通过，应付 ¥" + amt + (item && item.note ? "（"+item.note+"）" : "") + "，请转账。";
+    document.getElementById("wx-amt").textContent = "¥" + amt;
+    document.getElementById("wx-note").textContent = item && item.note ? "事由：" + item.note : "";
+    await copyText(wxText);
+    document.getElementById("wx-mask").style.display = "flex";
   } else {
     toast("已驳回");
   }
   refreshAll();
 }
+
+async function copyText(t){
+  try { await navigator.clipboard.writeText(t); return true; }
+  catch(e){
+    const ta = document.createElement("textarea");
+    ta.value = t; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+    return true;
+  }
+}
+
+function copyWxText(){ copyText(wxText); toast("转账说明已复制"); }
+
+function tryOpenWeixin(){
+  // 浏览器对 weixin:// 协议支持不一，尝试唤起，失败由用户手动切微信
+  try { window.location.href = "weixin://"; } catch(e){}
+  toast("若未打开微信，请手动切换到微信");
+}
+
+function closeWxMask(){ document.getElementById("wx-mask").style.display = "none"; }
 
 // 账单 & 统计
 function thisMonthStr(){
