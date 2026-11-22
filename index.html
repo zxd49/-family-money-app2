@@ -322,10 +322,11 @@ async function persistNew(row){
   const key = PRESET_KEY;
   const headers = { apikey: key, "Content-Type": "application/json" };
   if(!key.startsWith("sb_")) headers["Authorization"] = "Bearer " + key;
-  // 云端列只接受：id, amount, category, note, status, created_at, approved_at
+  // 云端列：id, amount, category, note, status, created_at, approved_at, created_ts, reminded
   const cloudRow = {
     id: row.id, amount: row.amount, category: row.category, note: row.note,
-    status: row.status, created_at: row.created_at, approved_at: row.approved_at
+    status: row.status, created_at: row.created_at, approved_at: row.approved_at,
+    created_ts: row.created_ts, reminded: false
   };
   let statusTxt = "";
   try {
@@ -398,6 +399,7 @@ async function submitApply(){
       note: note,
       status: "pending",
       created_at: new Date().toLocaleString("zh-CN"),
+      created_ts: Date.now(),
       approved_at: ""
     };
     await persistNew(row);
@@ -422,6 +424,7 @@ async function sendToWife(){
     note: note,
     status: "pending",
     created_at: new Date().toLocaleString("zh-CN"),
+    created_ts: Date.now(),
     approved_at: ""
   };
   await persistNew(row);
@@ -474,6 +477,7 @@ async function manualAdd(){
     note: note,
     status: "pending",
     created_at: new Date().toLocaleString("zh-CN"),
+    created_ts: Date.now(),
     approved_at: ""
   };
   await persistNew(row);
