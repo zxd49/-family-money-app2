@@ -514,10 +514,10 @@ let wxText = "";
 async function decide(id, status){
   const patch = { status, approved_at: new Date().toLocaleString("zh-CN") };
   await persistUpdate(id, patch);
+  const arr = await loadData();
+  const item = arr.find(x=>x.id===id);
+  const amt = item ? item.amount.toFixed(2) : "0.00";
   if(status==="approved"){
-    const arr = await loadData();
-    const item = arr.find(x=>x.id===id);
-    const amt = item ? item.amount.toFixed(2) : "0.00";
     wxText = "经费审批通过，应付 ¥" + amt + (item && item.note ? "（"+item.note+"）" : "") + "，请转账。";
     document.getElementById("wx-amt").textContent = "¥" + amt;
     document.getElementById("wx-note").textContent = item && item.note ? "事由：" + item.note : "";
@@ -526,7 +526,7 @@ async function decide(id, status){
     await barkSend((cloudCfg.barkKey || defaultBarkKey()), "申请已通过", `${roleName()}的申请 ¥${amt} 已通过审批\n事由：${item?item.note||"（无）":"（无）"}`);
   } else {
     toast("已驳回");
-    await barkSend((cloudCfg.barkKey || defaultBarkKey()), "申请被驳回", `${roleName()}的申请 ¥${item?item.amount.toFixed(2):"0.00"} 被驳回\n事由：${item?item.note||"（无）":"（无）"}`);
+    await barkSend((cloudCfg.barkKey || defaultBarkKey()), "申请被驳回", `${roleName()}的申请 ¥${amt} 被驳回\n事由：${item?item.note||"（无）":"（无）"}`);
   }
   refreshAll();
 }
