@@ -245,8 +245,18 @@ async function loadData(){
       // 合并云端与本地，按 id 去重，云端优先
       const local = loadLocal();
       const map = new Map();
-      [...local, ...cloud].forEach(x=>map.set(x.id, x));
-      return [...map.values()].sort((a,b)=>b.id-a.id);
+      // 先放本地，再用云端覆盖同 id，避免重复
+      local.forEach(x=>map.set(x.id, x));
+      cloud.forEach(x=>map.set(x.id, x));
+      // 二次去重：本地旧副本（id 不同）若与云端同金额/事由/时间，则丢弃
+      const cloudKeys = new Set(cloud.map(x=>`${x.amount}|${x.note}|${x.createdAt}`));
+      const merged = [...map.values()].filter(x=>{
+        const isCloud = cloud.some(c=>c.id===x.id);
+        if(isCloud) return true;
+        // 本地记录：若云端已存在同内容则跳过
+        return !cloudKeys.has(`${x.amount}|${x.note}|${x.createdAt}`);
+      });
+      return merged.sort((a,b)=>b.id-a.id);
     } catch(e){ console.error(e); toast("云端读取失败: " + e.message); }
   }
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -279,8 +289,10 @@ async function persistNew(row){
     statusTxt += " 回读条数="+gj.length;
     document.getElementById("sync-tag").textContent = "云端已写入";
   } catch(e){ console.error("INSERT ERR:", e); errMsg = String(e.message||e); }
-  // 无论云端是否成功，都写一份本地兜底
-  const arr = loadLocal(); arr.unshift(row); saveLocal(arr);
+  // 云端成功：本地不重复存（以云端为准）；云端失败才写本地兜底
+  if(!cloudOk){
+    const arr = loadLocal(); arr.unshift(row); saveLocal(arr);
+  }
   if(!cloudOk) toast("⚠️ 云端未写入: "+errMsg);
   else toast("写入"+statusTxt);
   return cloudOk;
