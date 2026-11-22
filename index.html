@@ -562,6 +562,36 @@ async function barkPush(row){
   const body = `${roleName()}发起申请\n用途：${row.category}\n金额：¥${row.amount.toFixed(2)}\n事由：${row.note || "（未填写）"}`;
   await barkSend(bk, title, body);
 }
+
+// 解析手机端 zh-CN 本地时间（2026/11/22 15:30:00）为毫秒时间戳
+function parseLocalTime(s){
+  if(!s) return NaN;
+  const m = String(s).match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})[ \t]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if(!m) return NaN;
+  const [,y,mo,d,h,mi,se] = m;
+  return new Date(+y,+mo-1,+d,+h,+mi,+(se||0)).getTime();
+}
+
+// 打开页面时扫描：超24小时仍待审批的，补发一次提醒（防重复用本地已提醒集合）
+let _overdueNotified = new Set();
+async function remindOverdue(){
+  if(!cloudCfg.enabled) return;
+  try{
+    const arr = await loadData();
+    const threshold = 24*60*60*1000;
+    const now = Date.now();
+    const bk = (cloudCfg && cloudCfg.barkKey) || defaultBarkKey();
+    for(const x of arr){
+      if(x.status!=="pending") continue;
+      if(_overdueNotified.has(String(x.id))) continue;
+      const ts = parseLocalTime(x.createdAt);
+      if(isNaN(ts) || now-ts < threshold) continue;
+      await barkSend(bk, "经费申请待审批（超24小时）",
+        `用途：${x.category}\n金额：¥${x.amount.toFixed(2)}\n事由：${x.note || "（未填写）"}\n已等待超过24小时，请尽快审批`);
+      _overdueNotified.add(String(x.id));
+    }
+  }catch(e){ console.error("remindOverdue", e); }
+}
 // 手动测试：点一下把测试通知推给对方 Bark key
 async function testBark(){
   const bk = (cloudCfg && cloudCfg.barkKey) || defaultBarkKey();
@@ -653,6 +683,9 @@ async function refreshAll(){
   if(approvedEnter) await renderPending();
   await renderHistory();
 }
+
+// 打开页面后扫描一次超24小时待审批并补发提醒（全自动兜底）
+remindOverdue();
 
 // 每 15 秒自动拉取一次云端最新数据，审批列表实时更新
 setInterval(async ()=>{
