@@ -515,10 +515,16 @@ function thisMonthStr(){
   const d = new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
 }
+// 从 createdAt（2026/11/22 ... 或 2026-11-22 ...）取 年-月
+function rowMonth(x){
+  const s = x.createdAt || "";
+  const m = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-]/);
+  return m ? m[1]+"-"+m[2].padStart(2,"0") : "";
+}
 async function renderHistory(){
   const arr = await loadData();
   const ym = thisMonthStr();
-  const monthList = arr.filter(x=>x.createdAt && x.createdAt.startsWith(ym));
+  const monthList = arr.filter(x=>rowMonth(x)===ym);
   const applyTotal = monthList.reduce((s,x)=>s+x.amount,0);
   const passList = monthList.filter(x=>x.status==="approved");
   const passTotal = passList.reduce((s,x)=>s+x.amount,0);
