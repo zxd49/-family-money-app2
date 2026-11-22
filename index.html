@@ -185,6 +185,14 @@ const CLOUD_CFG_KEY = "family_money_cloud_cfg";
 // 预填云端 URL（key 手动粘贴，避免手抄出错）
 const PRESET_URL = "https://gqvybdpgrfudiyvfqohr.supabase.co";
 const PRESET_KEY = "sb_publishable_TefJ6DXfsTaZDByxIv5Fmw_wTFPdjE9";
+// 双方 Bark key 内置：本机角色决定推给谁
+const BARK_KEY_HUSBAND = "fsBjHkxXcjh5P5pArABtkZ"; // 你手机
+const BARK_KEY_WIFE = "aawoZvMBUWvPZKyiWZ3bD3";    // 老婆手机
+// 按本机角色取对方 key：husband 推给老婆，wife 推给你
+function defaultBarkKey(roleOverride){
+  const r = roleOverride || (cloudCfg && cloudCfg.role) || "husband";
+  return (r === "wife") ? BARK_KEY_HUSBAND : BARK_KEY_WIFE;
+}
 
 /* ================= 云端（Supabase）预留 =================
    开启后，所有读写走 Supabase REST 接口；未配置时退回本地 localStorage。
@@ -211,8 +219,8 @@ function saveCloudConfig(){
   let url = document.getElementById("sb-url").value.trim().replace(/\/+$/,"");
   const key = document.getElementById("sb-key").value.trim();
   const table = document.getElementById("sb-table").value.trim() || "money_apps";
-  const barkKey = document.getElementById("bark-key").value.trim();
   const role = document.getElementById("my-role").value;
+  const barkKey = document.getElementById("bark-key").value.trim() || defaultBarkKey(role);
   const nickMe = document.getElementById("nick-me").value.trim();
   const nickOther = document.getElementById("nick-other").value.trim();
   if(!url || !key){ toast("请填写 URL 和 key"); return; }
@@ -514,10 +522,10 @@ async function decide(id, status){
     document.getElementById("wx-note").textContent = item && item.note ? "事由：" + item.note : "";
     await copyText(wxText);
     document.getElementById("wx-mask").style.display = "flex";
-    await barkSend(cloudCfg.barkKey, "申请已通过", `¥${amt} 已通过审批，事由：${item?item.note||"（无）":"（无）"}`);
+    await barkSend((cloudCfg.barkKey || defaultBarkKey()), "申请已通过", `¥${amt} 已通过审批，事由：${item?item.note||"（无）":"（无）"}`);
   } else {
     toast("已驳回");
-    await barkSend(cloudCfg.barkKey, "申请被驳回", `¥${item?item.amount.toFixed(2):"0.00"} 事由：${item?item.note||"（无）":"（无）"}`);
+    await barkSend((cloudCfg.barkKey || defaultBarkKey()), "申请被驳回", `¥${item?item.amount.toFixed(2):"0.00"} 事由：${item?item.note||"（无）":"（无）"}`);
   }
   refreshAll();
 }
@@ -548,17 +556,16 @@ async function barkSend(targetKey, title, body){
   } catch(e){ console.error("BARK ERR:", e); return false; }
 }
 async function barkPush(row){
-  const bk = (cloudCfg && cloudCfg.barkKey) || "";
+  const bk = (cloudCfg && cloudCfg.barkKey) || defaultBarkKey();
   const title = "经费申请待审批";
   const body = `${roleName()}发起申请\n用途：${row.category}\n金额：¥${row.amount.toFixed(2)}\n事由：${row.note || "（未填写）"}`;
   await barkSend(bk, title, body);
 }
 // 手动测试：点一下把测试通知推给对方 Bark key
 async function testBark(){
-  const bk = document.getElementById("bark-key").value.trim();
-  if(!bk){ toast("先填对方 Bark key"); return; }
+  const bk = (cloudCfg && cloudCfg.barkKey) || defaultBarkKey();
   const ok = await barkSend(bk, "经费审批", "这是一条测试通知，收到就说明 Bark 配置成功");
-  toast(ok ? "已发送，请看对方手机" : "发送失败，检查 key");
+  toast(ok ? "已发送，请看对方手机" : "发送失败");
 }
 
 function tryOpenWeixin(){
@@ -664,7 +671,7 @@ document.getElementById("bark-key").value = _savedBark;
 document.getElementById("my-role").value = _savedRole;
 document.getElementById("nick-me").value = _savedNickMe;
 document.getElementById("nick-other").value = _savedNickOther;
-cloudCfg = { url: PRESET_URL, key: PRESET_KEY, table: "money_apps", barkKey: _savedBark, role: _savedRole, nickMe: _savedNickMe, nickOther: _savedNickOther, enabled: true };
+cloudCfg = { url: PRESET_URL, key: PRESET_KEY, table: "money_apps", barkKey: _savedBark || defaultBarkKey(_savedRole), role: _savedRole, nickMe: _savedNickMe, nickOther: _savedNickOther, enabled: true };
 localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg));
 document.getElementById("btn-forward").textContent = "提交并转发给" + (_savedNickOther || "对方") + "（微信）";
 initCloud();
