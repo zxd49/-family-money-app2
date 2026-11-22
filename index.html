@@ -96,6 +96,7 @@
   </div>
   <div class="card" id="approve-list" style="display:none">
     <h2>待审批申请</h2>
+    <button class="btn ghost small" onclick="clearPending()">一键清空全部待审批</button>
     <details>
       <summary>手动录入微信收到的申请</summary>
       <label>金额（元）</label>
@@ -598,6 +599,24 @@ async function delRow(id){
   const arr = loadLocal().filter(x=>x.id!==id);
   saveLocal(arr);
   toast("已删除");
+  refreshAll();
+}
+
+// 一键清空所有待审批记录（云端+本地）
+async function clearPending(){
+  const arr = await loadData();
+  const pending = arr.filter(x=>x.status==="pending");
+  if(pending.length===0){ toast("当前没有待审批"); return; }
+  if(!confirm(`确定清空全部 ${pending.length} 条待审批？已通过/驳回的记录不受影响。`)) return;
+  let fail = 0;
+  for(const x of pending){
+    try {
+      if(cloudCfg.enabled && sbClient) await sbClient.remove(x.id);
+    } catch(e){ console.error(e); fail++; }
+  }
+  const left = loadLocal().filter(x=>x.status!=="pending");
+  saveLocal(left);
+  toast(fail ? `完成，${fail} 条云端删除失败` : "已清空全部待审批");
   refreshAll();
 }
 
