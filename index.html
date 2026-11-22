@@ -240,7 +240,10 @@ function initCloud(){
     }),
     update: (id, patch) => fetch(`${cloudCfg.url}/rest/v1/${cloudCfg.table}?id=eq.${id}`, {
       method:"PATCH", headers, body: JSON.stringify(patch)
-    }).then(async r=>{ if(!r.ok) throw new Error("UPDATE "+r.status); return r.json(); })
+    }).then(async r=>{ if(!r.ok) throw new Error("UPDATE "+r.status); return r.json(); }),
+    remove: (id) => fetch(`${cloudCfg.url}/rest/v1/${cloudCfg.table}?id=eq.${id}`, {
+      method:"DELETE", headers
+    }).then(async r=>{ if(!r.ok) throw new Error("DELETE "+r.status); return r.json(); })
   };
   document.getElementById("sync-tag").textContent = "云端同步";
 }
@@ -521,6 +524,20 @@ function rowMonth(x){
   const m = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-]/);
   return m ? m[1]+"-"+m[2].padStart(2,"0") : "";
 }
+async function delRow(id){
+  if(!confirm("确定删除这条账单？删除后不可恢复。")) return;
+  try {
+    if(cloudCfg.enabled && sbClient){
+      await sbClient.remove(id);
+    }
+  } catch(e){ console.error(e); toast("云端删除失败: "+e.message); }
+  // 同步删本地兜底
+  const arr = loadLocal().filter(x=>x.id!==id);
+  saveLocal(arr);
+  toast("已删除");
+  refreshAll();
+}
+
 async function renderHistory(){
   const arr = await loadData();
   const ym = thisMonthStr();
@@ -543,6 +560,9 @@ async function renderHistory(){
       </div>
       <div class="reason">事由：${x.note || "（未填写）"}</div>
       <div class="meta">提交：${x.createdAt} ${x.approvedAt?("｜处理："+x.approvedAt):""}</div>
+      <div class="row">
+        <button class="btn small danger" onclick="delRow(${x.id})">删除</button>
+      </div>
     </div>
   `).join("");
 }
