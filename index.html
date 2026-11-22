@@ -523,10 +523,10 @@ async function decide(id, status){
     document.getElementById("wx-note").textContent = item && item.note ? "事由：" + item.note : "";
     await copyText(wxText);
     document.getElementById("wx-mask").style.display = "flex";
-    await barkSend((cloudCfg.barkKey || defaultBarkKey()), "申请已通过", `¥${amt} 已通过审批，事由：${item?item.note||"（无）":"（无）"}`);
+    await barkSend((cloudCfg.barkKey || defaultBarkKey()), "申请已通过", `${roleName()}的申请 ¥${amt} 已通过审批\n事由：${item?item.note||"（无）":"（无）"}`);
   } else {
     toast("已驳回");
-    await barkSend((cloudCfg.barkKey || defaultBarkKey()), "申请被驳回", `¥${item?item.amount.toFixed(2):"0.00"} 事由：${item?item.note||"（无）":"（无）"}`);
+    await barkSend((cloudCfg.barkKey || defaultBarkKey()), "申请被驳回", `${roleName()}的申请 ¥${item?item.amount.toFixed(2):"0.00"} 被驳回\n事由：${item?item.note||"（无）":"（无）"}`);
   }
   refreshAll();
 }
