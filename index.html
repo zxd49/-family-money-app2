@@ -82,7 +82,7 @@
     <label>事由说明</label>
     <textarea id="note" placeholder="简单说明用途"></textarea>
     <button class="btn" onclick="submitApply()">提交申请</button>
-    <button class="btn ghost" onclick="sendToWife()">提交并转发给老婆（微信）</button>
+    <button class="btn ghost" id="btn-forward" onclick="sendToWife()">提交并转发（微信）</button>
   </div>
 </div>
 
@@ -139,6 +139,10 @@
         <option value="husband">我（申请人/老公）</option>
         <option value="wife">老婆（审批人）</option>
       </select>
+      <label>我的称呼（通知里显示我是谁）</label>
+      <input id="nick-me" placeholder="如：老公 / 宝贝">
+      <label>对方称呼（转发按钮和文案里的对方）</label>
+      <input id="nick-other" placeholder="如：老婆 / 亲爱的">
       <label>对方 Bark key（提交/审批后推送给对方的手机）</label>
       <input id="bark-key" placeholder="对方 Bark 的 key">
       <button class="btn" onclick="saveCloudConfig()">保存并开启云端同步</button>
@@ -201,7 +205,7 @@ let sbClient = null;
 
 function loadCloudCfg(){
   const raw = localStorage.getItem(CLOUD_CFG_KEY);
-  return raw ? JSON.parse(raw) : { url:"", key:"", table:"money_apps", barkKey:"", role:"husband", enabled:false };
+  return raw ? JSON.parse(raw) : { url:"", key:"", table:"money_apps", barkKey:"", role:"husband", nickMe:"", nickOther:"", enabled:false };
 }
 function saveCloudConfig(){
   let url = document.getElementById("sb-url").value.trim().replace(/\/+$/,"");
@@ -209,9 +213,12 @@ function saveCloudConfig(){
   const table = document.getElementById("sb-table").value.trim() || "money_apps";
   const barkKey = document.getElementById("bark-key").value.trim();
   const role = document.getElementById("my-role").value;
+  const nickMe = document.getElementById("nick-me").value.trim();
+  const nickOther = document.getElementById("nick-other").value.trim();
   if(!url || !key){ toast("请填写 URL 和 key"); return; }
-  cloudCfg = { url, key, table, barkKey, role, enabled:true };
+  cloudCfg = { url, key, table, barkKey, role, nickMe, nickOther, enabled:true };
   localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg));
+  document.getElementById("btn-forward").textContent = "提交并转发给" + (nickOther || "对方") + "（微信）";
   initCloud();
   document.getElementById("sync-tag").textContent = "云端同步";
   toast("云端同步已开启");
@@ -413,13 +420,14 @@ async function sendToWife(){
   document.getElementById("note").value = "";
   await barkPush(row);
 
+  const other = (cloudCfg && cloudCfg.nickOther) || "对方";
   const text =
 "【经费申请待审批】\n" +
 "用途：" + category + "\n" +
 "金额：¥" + amount.toFixed(2) + "\n" +
 "事由：" + (note || "（未填写）") + "\n" +
 "提交时间：" + row.created_at + "\n" +
-"—— 请打开审批页面，输入密码 341126 审批";
+"—— " + other + "，请打开审批页面，输入密码 341126 审批";
 
   // 复制到剪贴板
   try { await navigator.clipboard.writeText(text); } catch(e){
@@ -527,7 +535,7 @@ async function copyText(t){
 function copyWxText(){ copyText(wxText); toast("转账说明已复制"); }
 
 // Bark：把待审批提醒推送给对方 iPhone（系统通知）
-function roleName(){ return (cloudCfg.role === "wife") ? "老婆" : "老公"; }
+function roleName(){ return (cloudCfg && cloudCfg.nickMe) || ((cloudCfg.role === "wife") ? "老婆" : "老公"); }
 async function barkSend(targetKey, title, body){
   if(!targetKey) return false;
   try {
@@ -650,10 +658,15 @@ document.getElementById("sb-key").value = PRESET_KEY;
 document.getElementById("sb-table").value = "money_apps";
 const _savedBark = (loadCloudCfg().barkKey || "");
 const _savedRole = (loadCloudCfg().role || "husband");
+const _savedNickMe = (loadCloudCfg().nickMe || "");
+const _savedNickOther = (loadCloudCfg().nickOther || "");
 document.getElementById("bark-key").value = _savedBark;
 document.getElementById("my-role").value = _savedRole;
-cloudCfg = { url: PRESET_URL, key: PRESET_KEY, table: "money_apps", barkKey: _savedBark, role: _savedRole, enabled: true };
+document.getElementById("nick-me").value = _savedNickMe;
+document.getElementById("nick-other").value = _savedNickOther;
+cloudCfg = { url: PRESET_URL, key: PRESET_KEY, table: "money_apps", barkKey: _savedBark, role: _savedRole, nickMe: _savedNickMe, nickOther: _savedNickOther, enabled: true };
 localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg));
+document.getElementById("btn-forward").textContent = "提交并转发给" + (_savedNickOther || "对方") + "（微信）";
 initCloud();
 document.getElementById("sync-tag").textContent = "云端同步";
 refreshAll();
