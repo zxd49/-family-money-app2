@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<title>家庭经费审批 v20261122-直连</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; background:#f2f3f5; color:#222; padding-bottom:80px; }
+  .tabbar { position:fixed; bottom:0; left:0; right:0; background:#fff; display:flex; border-top:1px solid #eee; z-index:10; }
+  .tabbar button { flex:1; padding:12px 0; background:none; border:none; font-size:14px; color:#888; }
+  .tabbar button.active { color:#1677ff; font-weight:600; }
+  .page { display:none; padding:16px; }
+  .page.active { display:block; }
+  .card { background:#fff; border-radius:12px; padding:16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  h2 { font-size:17px; margin-bottom:14px; }
+  label { display:block; font-size:13px; color:#666; margin:12px 0 6px; }
+  input, select, textarea { width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px; font-size:15px; background:#fff; }
+  textarea { height:72px; resize:none; }
+  .btn { display:block; width:100%; padding:13px; border:none; border-radius:10px; font-size:16px; background:#1677ff; color:#fff; margin-top:14px; }
+  .btn.ghost { background:#fff; color:#1677ff; border:1px solid #1677ff; }
+  .btn.danger { background:#ff4d4f; }
+  .btn.small { width:auto; padding:8px 16px; font-size:14px; margin:0; display:inline-block; }
+  .row { display:flex; gap:10px; margin-top:14px; }
+  .row .btn { flex:1; }
+  .item { padding:12px 0; border-bottom:1px solid #f0f0f0; }
+  .item:last-child { border-bottom:none; }
+  .item-top { display:flex; justify-content:space-between; align-items:center; }
+  .amount { font-size:18px; font-weight:700; color:#ff6a00; }
+  .status { font-size:12px; padding:3px 10px; border-radius:20px; }
+  .st-pending { background:#fff7e6; color:#fa8c16; }
+  .st-approved { background:#f6ffed; color:#52c41a; }
+  .st-rejected { background:#fff1f0; color:#ff4d4f; }
+  .meta { font-size:12px; color:#999; margin-top:4px; }
+  .reason { font-size:14px; margin-top:6px; }
+  .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .stat { background:#f7f9fc; border-radius:10px; padding:14px; text-align:center; }
+  .stat .num { font-size:22px; font-weight:700; color:#1677ff; margin-top:4px; }
+  .stat .lbl { font-size:12px; color:#888; }
+  .pwd-box { max-width:280px; margin:0 auto; text-align:center; }
+  .toast { position:fixed; top:40%; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.8); color:#fff; padding:10px 20px; border-radius:8px; font-size:14px; z-index:99; display:none; }
+  .empty { text-align:center; color:#aaa; padding:30px 0; font-size:14px; }
+  .sync-tag { font-size:12px; color:#52c41a; float:right; }
+  details { margin-top:8px; }
+  details summary { font-size:13px; color:#1677ff; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<!-- 提交申请页 -->
+<div class="page active" id="page-apply">
+  <div class="card">
+    <h2>发起经费申请 <span class="sync-tag" id="sync-tag">本地模式</span></h2>
+    <label>申请金额（元）</label>
+    <input type="number" id="amount" placeholder="请输入金额" inputmode="decimal" step="0.01" min="0">
+    <label>用途分类</label>
+    <select id="category">
+      <option>生活费</option>
+      <option>加油</option>
+      <option>餐饮</option>
+      <option>购物</option>
+      <option>娱乐</option>
+      <option>备用金</option>
+      <option>其他</option>
+    </select>
+    <label>事由说明</label>
+    <textarea id="note" placeholder="简单说明用途"></textarea>
+    <button class="btn" onclick="submitApply()">提交申请</button>
+    <button class="btn ghost" onclick="sendToWife()">提交并转发给老婆（微信）</button>
+  </div>
+</div>
+
+<!-- 审批页 -->
+<div class="page" id="page-approve">
+  <div class="card pwd-box">
+    <h2 style="text-align:center">审批入口</h2>
+    <label>审批密码</label>
+    <input type="password" id="pwd" inputmode="numeric" placeholder="请输入审批密码" maxlength="6">
+    <button class="btn" onclick="loginApprove()">进入审批列表</button>
+  </div>
+  <div class="card" id="approve-list" style="display:none">
+    <h2>待审批申请</h2>
+    <details>
+      <summary>手动录入微信收到的申请</summary>
+      <label>金额（元）</label>
+      <input type="number" id="in-amount" inputmode="decimal" step="0.01" min="0">
+      <label>用途分类</label>
+      <select id="in-category">
+        <option>生活费</option><option>加油</option><option>餐饮</option>
+        <option>购物</option><option>娱乐</option><option>备用金</option><option>其他</option>
+      </select>
+      <label>事由说明</label>
+      <textarea id="in-note" placeholder="粘贴微信收到的事由"></textarea>
+      <button class="btn" onclick="manualAdd()">录入为待审批</button>
+    </details>
+    <div id="pending-list"></div>
+  </div>
+</div>
+
+<!-- 我的申请 / 账单 -->
+<div class="page" id="page-mine">
+  <div class="card">
+    <h2>统计（本月）</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="lbl">本月申请总额</div><div class="num" id="stat-apply">0.00</div></div>
+      <div class="stat"><div class="lbl">本月通过总额</div><div class="num" id="stat-pass">0.00</div></div>
+      <div class="stat"><div class="lbl">待审批笔数</div><div class="num" id="stat-pending">0</div></div>
+      <div class="stat"><div class="lbl">已通过笔数</div><div class="num" id="stat-done">0</div></div>
+    </div>
+    <div class="row">
+      <button class="btn ghost small" onclick="exportExcel()">导出账单 Excel</button>
+    </div>
+    <details>
+      <summary>云端同步设置（Supabase）</summary>
+      <label>Supabase URL</label>
+      <input id="sb-url" placeholder="https://xxxx.supabase.co">
+      <label>Supabase anon key</label>
+      <input id="sb-key" placeholder="eyJhbGciOi...">
+      <label>表名（默认 money_apps）</label>
+      <input id="sb-table" value="money_apps">
+      <button class="btn" onclick="saveCloudConfig()">保存并开启云端同步</button>
+      <button class="btn ghost" onclick="testCloud()">测试连接</button>
+      <button class="btn ghost" onclick="disableCloud()">关闭云端同步（回到本地）</button>
+    </details>
+  </div>
+  <div class="card">
+    <h2>历史申请记录</h2>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<div class="tabbar">
+  <button class="active" data-page="page-apply" onclick="switchTab(this)">发起申请</button>
+  <button data-page="page-approve" onclick="switchTab(this)">审批</button>
+  <button data-page="page-mine" onclick="switchTab(this)">账单统计</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= 配置区 ================= */
+const APPROVE_PWD = "341126";
+const STORAGE_KEY = "family_money_apps";
+const CLOUD_CFG_KEY = "family_money_cloud_cfg";
+// 预填云端 URL（key 手动粘贴，避免手抄出错）
+const PRESET_URL = "https://gqvybdpgrfudiyvfqohr.supabase.co";
+const PRESET_KEY = "sb_publishable_TefJ6DXfsTaZDByxIv5Fmw_wTFPdjE9";
+
+/* ================= 云端（Supabase）预留 =================
+   开启后，所有读写走 Supabase REST 接口；未配置时退回本地 localStorage。
+   Supabase 建表 SQL（在 Supabase SQL Editor 执行）：
+   create table money_apps (
+     id bigint primary key,
+     amount numeric,
+     category text,
+     note text,
+     status text,
+     created_at text,
+     approved_at text
+   );
+   并在 Authentication → Policies 开匿名读写（演示用）。
+========================================================= */
+let cloudCfg = loadCloudCfg();
+let sbClient = null;
+
+function loadCloudCfg(){
+  const raw = localStorage.getItem(CLOUD_CFG_KEY);
+  return raw ? JSON.parse(raw) : { url:"", key:"", table:"money_apps", enabled:false };
+}
+function saveCloudConfig(){
+  let url = document.getElementById("sb-url").value.trim().replace(/\/+$/,"");
+  const key = document.getElementById("sb-key").value.trim();
+  const table = document.getElementById("sb-table").value.trim() || "money_apps";
+  if(!url || !key){ toast("请填写 URL 和 key"); return; }
+  cloudCfg = { url, key, table, enabled:true };
+  localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg));
+  initCloud();
+  document.getElementById("sync-tag").textContent = "云端同步";
+  toast("云端同步已开启");
+  refreshAll();
+}
+function disableCloud(){
+  cloudCfg.enabled = false;
+  localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg));
+  document.getElementById("sync-tag").textContent = "本地模式";
+  toast("已切回本地模式");
+}
+
+// 测试云端连接：只发一次 GET，提示成功/失败与状态码
+async function testCloud(){
+  const url = document.getElementById("sb-url").value.trim().replace(/\/+$/,"");
+  const key = document.getElementById("sb-key").value.trim();
+  const table = document.getElementById("sb-table").value.trim() || "money_apps";
+  if(!url || !key){ toast("先填 URL 和 key"); return; }
+  const isNewKey = key.startsWith("sb_");
+  const headers = { apikey: key, "Content-Type": "application/json" };
+  if(!isNewKey) headers["Authorization"] = "Bearer " + key;
+  try {
+    const r = await fetch(`${url}/rest/v1/${table}?select=id&limit=1`, { headers });
+    if(r.ok){ toast("✅ 连接成功，云端可用"); }
+    else { toast("❌ 失败 HTTP " + r.status + "，检查 key 是否完整"); }
+  } catch(e){ toast("❌ 网络错误: " + e.message); }
+}
+function initCloud(){
+  if(!cloudCfg.enabled) return;
+  const key = cloudCfg.key;
+  const isNewKey = key.startsWith("sb_");
+  const headers = { apikey: key, "Content-Type": "application/json" };
+  if(!isNewKey) headers["Authorization"] = "Bearer " + key;
+  sbClient = {
+    get: () => fetch(`${cloudCfg.url}/rest/v1/${cloudCfg.table}?select=*`, { headers })
+      .then(async r=>{ if(!r.ok) throw new Error("GET "+r.status); return r.json(); }),
+    insert: (row) => fetch(`${cloudCfg.url}/rest/v1/${cloudCfg.table}`, {
+      method:"POST", headers, body: JSON.stringify(row)
+    }).then(async r=>{
+      const txt = await r.text();
+      if(!r.ok) throw new Error("INSERT "+r.status+": "+txt);
+      return r.json();
+    }),
+    update: (id, patch) => fetch(`${cloudCfg.url}/rest/v1/${cloudCfg.table}?id=eq.${id}`, {
+      method:"PATCH", headers, body: JSON.stringify(patch)
+    }).then(async r=>{ if(!r.ok) throw new Error("UPDATE "+r.status); return r.json(); })
+  };
+  document.getElementById("sync-tag").textContent = "云端同步";
+}
+
+/* ================= 数据层：云端优先，本地兜底 ================= */
+async function loadData(){
+  if(cloudCfg.enabled && sbClient){
+    try {
+      const rows = await sbClient.get();
+      const cloud = rows.map(r=>({
+        id: r.id, amount: Number(r.amount), category: r.category, note: r.note || "",
+        status: r.status, createdAt: r.created_at || "", approvedAt: r.approved_at || ""
+      }));
+      // 合并云端与本地，按 id 去重，云端优先
+      const local = loadLocal();
+      const map = new Map();
+      [...local, ...cloud].forEach(x=>map.set(x.id, x));
+      return [...map.values()].sort((a,b)=>b.id-a.id);
+    } catch(e){ console.error(e); toast("云端读取失败: " + e.message); }
+  }
+  const raw = localStorage.getItem(STORAGE_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+async function persistNew(row){
+  let cloudOk = false, errMsg = "";
+  const url = PRESET_URL;
+  const key = PRESET_KEY;
+  const headers = { apikey: key, "Content-Type": "application/json" };
+  if(!key.startsWith("sb_")) headers["Authorization"] = "Bearer " + key;
+  let statusTxt = "";
+  try {
+    const r = await fetch(`${url}/rest/v1/money_apps`, {
+      method:"POST", headers, body: JSON.stringify(row)
+    });
+    const txt = await r.text();
+    statusTxt = "HTTP "+r.status;
+    if(!r.ok) throw new Error("HTTP "+r.status+": "+txt);
+    cloudOk = true;
+    // 提交后立刻回读云端，确认是否真落表
+    await new Promise(x=>setTimeout(x,400));
+    const g = await fetch(`${url}/rest/v1/money_apps?select=id,amount`, { headers });
+    const gj = await g.json();
+    statusTxt += " 回读条数="+gj.length;
+    document.getElementById("sync-tag").textContent = "云端已写入";
+  } catch(e){ console.error("INSERT ERR:", e); errMsg = String(e.message||e); }
+  // 无论云端是否成功，都写一份本地兜底
+  const arr = loadLocal(); arr.unshift(row); saveLocal(arr);
+  if(!cloudOk) toast("⚠️ 云端未写入: "+errMsg);
+  else toast("写入"+statusTxt);
+  return cloudOk;
+}
+async function persistUpdate(id, patch){
+  if(cloudCfg.enabled && sbClient){
+    try {
+      await sbClient.update(id, patch);
+      return;
+    } catch(e){ console.error(e); toast("云端更新失败: " + e.message); }
+  }
+  const arr = loadLocal();
+  const it = arr.find(x=>x.id===id);
+  if(it) Object.assign(it, patch);
+  saveLocal(arr);
+}
+function loadLocal(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+function saveLocal(arr){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+}
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.style.display = "block";
+  setTimeout(()=>t.style.display="none", 1800);
+}
+function switchTab(btn){
+  document.querySelectorAll(".tabbar button").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  document.getElementById(btn.dataset.page).classList.add("active");
+  refreshAll();
+}
+
+// 提交申请
+async function submitApply(){
+  try {
+    const amount = parseFloat(document.getElementById("amount").value);
+    const category = document.getElementById("category").value;
+    const note = document.getElementById("note").value.trim();
+    if(!amount || amount<=0){ toast("请输入正确金额"); return; }
+    const row = {
+      id: Date.now(),
+      amount: amount,
+      category: category,
+      note: note,
+      status: "pending",
+      createdAt: new Date().toLocaleString("zh-CN"),
+      approvedAt: ""
+    };
+    await persistNew(row);
+    document.getElementById("amount").value = "";
+    document.getElementById("note").value = "";
+    toast("提交成功，等待审批");
+    refreshAll();
+  } catch(e){ console.error(e); toast("提交出错: " + e.message); }
+}
+
+// 提交并转发：生成可复制的申请卡片文字，跳转微信发给老婆
+async function sendToWife(){
+  const amount = parseFloat(document.getElementById("amount").value);
+  const category = document.getElementById("category").value;
+  const note = document.getElementById("note").value.trim();
+  if(!amount || amount<=0){ toast("请输入正确金额"); return; }
+  const row = {
+    id: Date.now(),
+    amount: amount,
+    category: category,
+    note: note,
+    status: "pending",
+    createdAt: new Date().toLocaleString("zh-CN"),
+    approvedAt: ""
+  };
+  await persistNew(row);
+  document.getElementById("amount").value = "";
+  document.getElementById("note").value = "";
+
+  const text =
+"【经费申请待审批】\n" +
+"用途：" + category + "\n" +
+"金额：¥" + amount.toFixed(2) + "\n" +
+"事由：" + (note || "（未填写）") + "\n" +
+"提交时间：" + row.createdAt + "\n" +
+"—— 请打开审批页面，输入密码 341126 审批";
+
+  // 复制到剪贴板
+  try { await navigator.clipboard.writeText(text); } catch(e){
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+  }
+  toast("申请已保存，内容已复制，去微信粘贴发送");
+  // 唤起微信
+  setTimeout(()=>{ window.location.href = "weixin://"; }, 400);
+  refreshAll();
+}
+
+// 审批登录
+let approvedEnter = false;
+function loginApprove(){
+  const pwd = document.getElementById("pwd").value;
+  if(pwd !== APPROVE_PWD){ toast("密码错误"); return; }
+  approvedEnter = true;
+  document.querySelector("#page-approve .pwd-box").style.display="none";
+  document.getElementById("approve-list").style.display="block";
+  refreshAll();
+}
+
+// 老婆端手动录入微信收到的申请（本地模式用）
+async function manualAdd(){
+  const amount = parseFloat(document.getElementById("in-amount").value);
+  const category = document.getElementById("in-category").value;
+  const note = document.getElementById("in-note").value.trim();
+  if(!amount || amount<=0){ toast("请输入正确金额"); return; }
+  const row = {
+    id: Date.now(),
+    amount: amount,
+    category: category,
+    note: note,
+    status: "pending",
+    createdAt: new Date().toLocaleString("zh-CN"),
+    approvedAt: ""
+  };
+  await persistNew(row);
+  document.getElementById("in-amount").value = "";
+  document.getElementById("in-note").value = "";
+  toast("已录入为待审批");
+  refreshAll();
+}
+
+function statusTag(s){
+  if(s==="pending") return '<span class="status st-pending">待审批</span>';
+  if(s==="approved") return '<span class="status st-approved">已通过</span>';
+  return '<span class="status st-rejected">已驳回</span>';
+}
+
+async function renderPending(){
+  const arr = await loadData();
+  const pending = arr.filter(x=>x.status==="pending");
+  const box = document.getElementById("pending-list");
+  if(pending.length===0){ box.innerHTML = '<div class="empty">暂无待审批申请</div>'; return; }
+  box.innerHTML = pending.map(x=>`
+    <div class="item">
+      <div class="item-top">
+        <div><b>${x.category}</b> · <span class="amount">¥${x.amount.toFixed(2)}</span></div>
+        ${statusTag(x.status)}
+      </div>
+      <div class="reason">事由：${x.note || "（未填写）"}</div>
+      <div class="meta">提交时间：${x.createdAt}</div>
+      <div class="row">
+        <button class="btn small" onclick="decide(${x.id},'approved')">同意并微信转账</button>
+        <button class="btn small danger" onclick="decide(${x.id},'rejected')">驳回</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function decide(id, status){
+  const patch = { status, approved_at: new Date().toLocaleString("zh-CN") };
+  await persistUpdate(id, patch);
+  if(status==="approved"){
+    const arr = await loadData();
+    const item = arr.find(x=>x.id===id);
+    window.location.href = "weixin://";
+    toast("已批准，请在微信手动转账 ¥"+(item?item.amount.toFixed(2):""));
+  } else {
+    toast("已驳回");
+  }
+  refreshAll();
+}
+
+// 账单 & 统计
+function thisMonthStr(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+}
+async function renderHistory(){
+  const arr = await loadData();
+  const ym = thisMonthStr();
+  const monthList = arr.filter(x=>x.createdAt && x.createdAt.startsWith(ym));
+  const applyTotal = monthList.reduce((s,x)=>s+x.amount,0);
+  const passList = monthList.filter(x=>x.status==="approved");
+  const passTotal = passList.reduce((s,x)=>s+x.amount,0);
+  document.getElementById("stat-apply").textContent = applyTotal.toFixed(2);
+  document.getElementById("stat-pass").textContent = passTotal.toFixed(2);
+  document.getElementById("stat-pending").textContent = monthList.filter(x=>x.status==="pending").length;
+  document.getElementById("stat-done").textContent = passList.length;
+
+  const box = document.getElementById("history-list");
+  if(arr.length===0){ box.innerHTML='<div class="empty">暂无记录</div>'; return; }
+  box.innerHTML = arr.map(x=>`
+    <div class="item">
+      <div class="item-top">
+        <div><b>${x.category}</b> · <span class="amount">¥${x.amount.toFixed(2)}</span></div>
+        ${statusTag(x.status)}
+      </div>
+      <div class="reason">事由：${x.note || "（未填写）"}</div>
+      <div class="meta">提交：${x.createdAt} ${x.approvedAt?("｜处理："+x.approvedAt):""}</div>
+    </div>
+  `).join("");
+}
+
+async function refreshAll(){
+  if(approvedEnter) await renderPending();
+  await renderHistory();
+}
+
+// 每 15 秒自动拉取一次云端最新数据，审批列表实时更新
+setInterval(async ()=>{
+  if(!cloudCfg.enabled) return;
+  await refreshAll();
+}, 15000);
+
+// 导出 Excel
+async function exportExcel(){
+  const arr = await loadData();
+  const mapped = arr.map(x=>({
+    "提交时间": x.createdAt,
+    "用途分类": x.category,
+    "金额(元)": x.amount,
+    "事由说明": x.note,
+    "审批状态": x.status==="approved"?"已通过":(x.status==="rejected"?"已驳回":"待审批"),
+    "处理时间": x.approvedAt
+  }));
+  if(mapped.length===0){ toast("暂无数据可导出"); return; }
+  const ws = XLSX.utils.json_to_sheet(mapped);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "审批账单");
+  XLSX.writeFile(wb, "家庭经费审批账单_"+thisMonthStr()+".xlsx");
+}
+
+// 启动：强制使用预填 URL/key，忽略手机旧缓存，避免旧半截 key/旧开关干扰
+document.getElementById("sb-url").value = PRESET_URL;
+document.getElementById("sb-key").value = PRESET_KEY;
+document.getElementById("sb-table").value = "money_apps";
+cloudCfg = { url: PRESET_URL, key: PRESET_KEY, table: "money_apps", enabled: true };
+localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg));
+initCloud();
+document.getElementById("sync-tag").textContent = "云端同步";
+refreshAll();
+</script>
+</body>
+</html>
