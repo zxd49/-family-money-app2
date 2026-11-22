@@ -134,8 +134,13 @@
       <input id="sb-key" placeholder="eyJhbGciOi...">
       <label>表名（默认 money_apps）</label>
       <input id="sb-table" value="money_apps">
-      <label>Bark 推送 key（老婆 iPhone 的 Bark，用于微信外的系统通知）</label>
-      <input id="bark-key" placeholder=" Bark 地址里 api.day.app/ 后面那段 key">
+      <label>本设备身份（我是谁）</label>
+      <select id="my-role">
+        <option value="husband">我（申请人/老公）</option>
+        <option value="wife">老婆（审批人）</option>
+      </select>
+      <label>对方 Bark key（提交/审批后推送给对方的手机）</label>
+      <input id="bark-key" placeholder="对方 Bark 的 key">
       <button class="btn" onclick="saveCloudConfig()">保存并开启云端同步</button>
       <button class="btn ghost" onclick="testCloud()">测试连接</button>
       <button class="btn ghost" onclick="disableCloud()">关闭云端同步（回到本地）</button>
@@ -195,15 +200,16 @@ let sbClient = null;
 
 function loadCloudCfg(){
   const raw = localStorage.getItem(CLOUD_CFG_KEY);
-  return raw ? JSON.parse(raw) : { url:"", key:"", table:"money_apps", barkKey:"", enabled:false };
+  return raw ? JSON.parse(raw) : { url:"", key:"", table:"money_apps", barkKey:"", role:"husband", enabled:false };
 }
 function saveCloudConfig(){
   let url = document.getElementById("sb-url").value.trim().replace(/\/+$/,"");
   const key = document.getElementById("sb-key").value.trim();
   const table = document.getElementById("sb-table").value.trim() || "money_apps";
   const barkKey = document.getElementById("bark-key").value.trim();
+  const role = document.getElementById("my-role").value;
   if(!url || !key){ toast("请填写 URL 和 key"); return; }
-  cloudCfg = { url, key, table, barkKey, enabled:true };
+  cloudCfg = { url, key, table, barkKey, role, enabled:true };
   localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg));
   initCloud();
   document.getElementById("sync-tag").textContent = "云端同步";
@@ -499,8 +505,10 @@ async function decide(id, status){
     document.getElementById("wx-note").textContent = item && item.note ? "事由：" + item.note : "";
     await copyText(wxText);
     document.getElementById("wx-mask").style.display = "flex";
+    await barkSend(cloudCfg.barkKey, "申请已通过", `¥${amt} 已通过审批，事由：${item?item.note||"（无）":"（无）"}`);
   } else {
     toast("已驳回");
+    await barkSend(cloudCfg.barkKey, "申请被驳回", `¥${item?item.amount.toFixed(2):"0.00"} 事由：${item?item.note||"（无）":"（无）"}`);
   }
   refreshAll();
 }
@@ -517,19 +525,23 @@ async function copyText(t){
 
 function copyWxText(){ copyText(wxText); toast("转账说明已复制"); }
 
-// Bark：把待审批提醒推送到老婆 iPhone（系统通知）
-async function barkPush(row){
-  const bk = (cloudCfg && cloudCfg.barkKey) || "";
-  if(!bk) return;
+// Bark：把待审批提醒推送给对方 iPhone（系统通知）
+function roleName(){ return (cloudCfg.role === "wife") ? "老婆" : "老公"; }
+async function barkSend(targetKey, title, body){
+  if(!targetKey) return;
   try {
-    const title = "经费申请待审批";
-    const body = `用途：${row.category}\n金额：¥${row.amount.toFixed(2)}\n事由：${row.note || "（未填写）"}`;
-    await fetch(`https://api.day.app/${encodeURIComponent(bk)}`, {
+    await fetch(`https://api.day.app/${encodeURIComponent(targetKey)}`, {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ title, body, group:"经费审批" })
     });
   } catch(e){ console.error("BARK ERR:", e); }
+}
+async function barkPush(row){
+  const bk = (cloudCfg && cloudCfg.barkKey) || "";
+  const title = "经费申请待审批";
+  const body = `${roleName()}发起申请\n用途：${row.category}\n金额：¥${row.amount.toFixed(2)}\n事由：${row.note || "（未填写）"}`;
+  await barkSend(bk, title, body);
 }
 
 function tryOpenWeixin(){
@@ -628,8 +640,10 @@ document.getElementById("sb-url").value = PRESET_URL;
 document.getElementById("sb-key").value = PRESET_KEY;
 document.getElementById("sb-table").value = "money_apps";
 const _savedBark = (loadCloudCfg().barkKey || "");
+const _savedRole = (loadCloudCfg().role || "husband");
 document.getElementById("bark-key").value = _savedBark;
-cloudCfg = { url: PRESET_URL, key: PRESET_KEY, table: "money_apps", barkKey: _savedBark, enabled: true };
+document.getElementById("my-role").value = _savedRole;
+cloudCfg = { url: PRESET_URL, key: PRESET_KEY, table: "money_apps", barkKey: _savedBark, role: _savedRole, enabled: true };
 localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg));
 initCloud();
 document.getElementById("sync-tag").textContent = "云端同步";
